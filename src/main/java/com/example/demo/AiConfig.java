@@ -11,14 +11,21 @@ public class AiConfig {
 
     @Bean
     public ChatLanguageModel chatLanguageModel() {
-        // 💡 针对 0.34.0 版本，必须显式设置所有超时参数，否则会报 null 错误
+        // 💡 重点：这里直接写变量名，不需要加 $ 符号
+        String apiKey = System.getenv("ZHIPU_API_KEY");
+
+        // 增加一个防御性判断，防止你忘了配环境变量导致程序报错
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new RuntimeException("❌ 启动失败：未检测到环境变量 ZHIPU_API_KEY，请检查 IDEA 配置！");
+        }
+
         return ZhipuAiChatModel.builder()
-                .apiKey("6e39ae6d74324048ba945916fcd4e2ab.qIXyhns5lSGYJnty") // 你的智谱 Key
+                .apiKey(apiKey)
                 .model("glm-4-flash")
-                .callTimeout(Duration.ofSeconds(60))    // 总调用超时
-                .connectTimeout(Duration.ofSeconds(60)) // 连接建立超时
-                .readTimeout(Duration.ofSeconds(60))    // 读取响应超时
-                .writeTimeout(Duration.ofSeconds(60))   // 写入请求超时
+                .callTimeout(Duration.ofSeconds(60))
+                .connectTimeout(Duration.ofSeconds(60))
+                .readTimeout(Duration.ofSeconds(60))
+                .writeTimeout(Duration.ofSeconds(60))
                 .build();
     }
 }
