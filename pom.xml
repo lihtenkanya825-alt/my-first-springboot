@@ -5,39 +5,59 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.5.11</version>
-		<relativePath/> <!-- lookup parent from repository -->
+		<version>3.2.5</version>
+		<relativePath/>
 	</parent>
 	<groupId>com.example</groupId>
 	<artifactId>demo</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>demo</name>
-	<description>Demo project for Spring Boot</description>
+
 	<properties>
 		<java.version>21</java.version>
+		<langchain4j.version>0.34.0</langchain4j.version>
 	</properties>
 
 	<dependencies>
-		<!-- 1. Web 核心依赖：让你能写网页接口 -->
+		<!-- 1. Web 核心：处理网页请求 -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
 
-		<!-- 2. Redis 依赖：昨天的缓存功能 -->
+		<!-- 2. Redis：【补回】解决 UserController 报错的关键 -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-redis</artifactId>
 		</dependency>
 
-		<!-- 3. 【新增加】AI 核心框架：支持调用大模型 -->
+		<!-- 3. LangChain4j 核心逻辑 -->
 		<dependency>
 			<groupId>dev.langchain4j</groupId>
-			<artifactId>langchain4j-open-ai-spring-boot-starter</artifactId>
-			<version>0.30.0</version>
+			<artifactId>langchain4j</artifactId>
+			<version>${langchain4j.version}</version>
 		</dependency>
 
-		<!-- 4. 测试依赖：系统自带 -->
+		<!-- 4. 智谱 AI 适配器 -->
+		<dependency>
+			<groupId>dev.langchain4j</groupId>
+			<artifactId>langchain4j-zhipu-ai</artifactId>
+			<version>${langchain4j.version}</version>
+		</dependency>
+
+		<!-- 5. 知识库解析器 (Tika) -->
+		<dependency>
+			<groupId>dev.langchain4j</groupId>
+			<artifactId>langchain4j-document-parser-apache-tika</artifactId>
+			<version>${langchain4j.version}</version>
+		</dependency>
+
+		<!-- 6. 嵌入模型：负责把文字转成数字 (RAG 核心) -->
+		<dependency>
+			<groupId>dev.langchain4j</groupId>
+			<artifactId>langchain4j-embeddings-all-minilm-l6-v2-q</artifactId>
+			<version>${langchain4j.version}</version>
+		</dependency>
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
@@ -54,4 +74,10 @@
 		</plugins>
 	</build>
 
+	<repositories>
+		<repository>
+			<id>aliyun</id>
+			<url>https://maven.aliyun.com/repository/public</url>
+		</repository>
+	</repositories>
 </project>
