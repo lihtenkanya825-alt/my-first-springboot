@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>NexusAI | 通用智能大脑</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --card-bg: rgba(20, 20, 25, 0.8);
+            --accent-color: #a371ff; /* 极光紫 */
+            --text-main: #ffffff;
+            --text-dim: #a1a1a6;
+        }
+
+        body, html {
+            margin: 0; padding: 0; height: 100%;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: "SF Pro Display", -apple-system, sans-serif;
+            display: flex; flex-direction: column; align-items: center;
+            overflow: hidden;
+        }
+
+        /* 动态背景：流动的紫色星云 */
+        .nebula {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at 80% 20%, rgba(163, 113, 255, 0.1) 0%, transparent 40%),
+            radial-gradient(circle at 20% 80%, rgba(88, 101, 242, 0.1) 0%, transparent 40%);
+            z-index: -1;
+        }
+
+        header { margin-top: 40px; text-align: center; }
+        header h1 {
+            font-size: 48px; font-weight: 700; margin: 0;
+            background: linear-gradient(90deg, #fff, var(--accent-color));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        #chat-container {
+            width: 85%; max-width: 900px; flex: 1;
+            display: flex; flex-direction: column; margin-top: 20px;
+            min-height: 0; /* 💡 关键：防止 flex 子项溢出 */
+        }
+
+        /* [v2.5-UI增强] 修复滚动逻辑 */
+        #chat-window {
+            flex: 1;
+            background: var(--card-bg);
+            backdrop-filter: blur(30px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 40px;
+            overflow-y: auto; /* 💡 允许纵向滚动 */
+            box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+            scroll-behavior: smooth; /* 💡 平滑滚动 */
+        }
+
+        /* 💡 自定义滚动条（影视飓风/极简风） */
+        #chat-window::-webkit-scrollbar {
+            width: 4px;
+        }
+        #chat-window::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        #chat-window::-webkit-scrollbar-thumb {
+            background: rgba(163, 113, 255, 0.3);
+            border-radius: 10px;
+        }
+
+        .ai-text {
+            font-size: 20px;
+            line-height: 1.7;
+            font-weight: 300;
+            white-space: pre-wrap;
+            padding-bottom: 20px; /* 留白防止光标被遮挡 */
+        }
+
+        .input-wrapper {
+            margin: 20px 0 40px; position: relative;
+        }
+
+        input {
+            width: 100%; height: 64px; background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 18px;
+            padding: 0 80px 0 25px; color: white; font-size: 18px; outline: none;
+            transition: all 0.4s ease;
+        }
+
+        input:focus { border-color: var(--accent-color); background: rgba(255,255,255,0.08); }
+
+        button {
+            position: absolute; right: 10px; top: 10px; height: 44px; width: 44px;
+            background: var(--accent-color); border: none; border-radius: 12px;
+            cursor: pointer; color: white; font-size: 20px;
+        }
+
+        .cursor { display: inline-block; width: 3px; height: 22px; background: var(--accent-color); margin-left: 5px; animation: blink 1s infinite; vertical-align: middle; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        .nav-link { position: absolute; top: 20px; right: 40px; color: var(--text-dim); text-decoration: none; font-size: 14px; transition: color 0.3s; }
+        .nav-link:hover { color: white; }
+    </style>
+</head>
+<body>
+<div class="nebula"></div>
+<a href="index.html" class="nav-link">← 切换至专业知识库</a>
+
+<header>
+    <h1>NexusAI</h1>
+    <p style="color: var(--text-dim)">通用智能对话系统</p>
+</header>
+
+<div id="chat-container">
+    <div id="chat-window">
+        <div id="output" class="ai-text">你好，我是 NexusAI。你想聊聊什么？从宇宙奥秘到代码逻辑，我都在线。</div>
+    </div>
+
+    <div class="input-wrapper">
+        <input type="text" id="userInput" placeholder="在此输入您的问题..." onkeydown="if(event.keyCode==13) send()">
+        <button onclick="send()">↑</button>
+    </div>
+</div>
+
+<script>
+    function send() {
+        const input = document.getElementById('userInput');
+        const output = document.getElementById('output');
+        const chatWin = document.getElementById('chat-window');
+        const msg = input.value;
+        if(!msg) return;
+
+        output.innerHTML = '<span class="cursor"></span>';
+        input.value = "";
+
+        const es = new EventSource(`/ai/chat/stream?message=${encodeURIComponent(msg)}`);
+        let content = "";
+
+        es.onmessage = (e) => {
+            content += e.data;
+            output.innerHTML = content + '<span class="cursor"></span>';
+
+            // [v2.5-UI增强] 每次字符跳动，滚动条自动追踪到底部
+            chatWin.scrollTop = chatWin.scrollHeight;
+        };
+
+        es.onerror = () => {
+            output.innerHTML = content; // 结束时移除光标
+            es.close();
+        };
+    }
+</script>
+</body>
+</html>

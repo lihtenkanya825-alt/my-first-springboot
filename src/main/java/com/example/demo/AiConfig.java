@@ -16,7 +16,7 @@ import java.time.Duration;
 public class AiConfig {
 
     /**
-     * [v1.1优化] 封装 API Key 获取逻辑
+     * [v1.0优化] 封装 API Key 获取逻辑
      * 遵循 12-Factor App 规范，从环境变量读取敏感信息
      */
     private String getApiKey() {

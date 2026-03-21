@@ -42,6 +42,19 @@
             to { transform: rotate(360deg); }
         }
 
+        /* [v2.5-UI增强] 导航链接样式 */
+        .nav-link {
+            position: absolute;
+            top: 20px;
+            right: 40px;
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.3s;
+            z-index: 10;
+        }
+        .nav-link:hover { color: #fff; }
+
         header {
             margin-top: 50px;
             text-align: center;
@@ -73,28 +86,37 @@
             justify-content: center;
             position: relative;
             z-index: 1;
+            min-height: 0; /* 防止溢出 */
         }
 
+        /* [v2.5-UI增强] 修复滚动逻辑 */
         #chat-window {
             background: var(--card-bg);
             backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 20px;
             padding: 30px;
-            height: 400px;
-            overflow-y: auto;
+            flex: 1; /* 自动撑开 */
+            overflow-y: auto; /* 💡 开启滚动 */
             margin-bottom: 20px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.4);
-            scrollbar-width: none; /* Firefox */
+            scroll-behavior: smooth;
         }
 
-        #chat-window::-webkit-scrollbar { display: none; }
+        /* 💡 自定义滚动条（蓝色调） */
+        #chat-window::-webkit-scrollbar { width: 4px; }
+        #chat-window::-webkit-scrollbar-track { background: transparent; }
+        #chat-window::-webkit-scrollbar-thumb {
+            background: rgba(0, 113, 227, 0.3);
+            border-radius: 10px;
+        }
 
         .answer-text {
             line-height: 1.6;
             font-size: 18px;
             color: #ffffff;
             white-space: pre-wrap;
+            padding-bottom: 20px;
         }
 
         /* 像苹果一样的输入框 */
@@ -149,9 +171,7 @@
             vertical-align: middle;
         }
 
-        @keyframes blink {
-            50% { opacity: 0; }
-        }
+        @keyframes blink { 50% { opacity: 0; } }
 
         @keyframes fadeInDown {
             from { opacity: 0; transform: translateY(-20px); }
@@ -160,6 +180,9 @@
     </style>
 </head>
 <body>
+
+<!-- [v2.5-UI增强] 跳转链接 -->
+<a href="chat.html" class="nav-link">切换至通用智能大脑 →</a>
 
 <header>
     <h1>NexusAI</h1>
@@ -181,6 +204,7 @@
     function ask() {
         const questionInput = document.getElementById('question');
         const outputDiv = document.getElementById('output');
+        const chatWin = document.getElementById('chat-window');
         const q = questionInput.value;
 
         if (!q) return;
@@ -199,8 +223,7 @@
             fullAnswer += event.data;
             outputDiv.innerHTML = fullAnswer + '<span class="cursor"></span>';
 
-            // 自动滚动到底部
-            const chatWin = document.getElementById('chat-window');
+            // [v2.5-UI增强] 自动追踪滚动到最底部
             chatWin.scrollTop = chatWin.scrollHeight;
         };
 
