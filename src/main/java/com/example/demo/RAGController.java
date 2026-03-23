@@ -20,6 +20,7 @@ import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.EmbeddingStoreIngestor;
 import dev.langchain4j.store.embedding.chroma.ChromaEmbeddingStore;
 import jakarta.annotation.PostConstruct;
+import org.springframework.data.redis.core.StringRedisTemplate; // [v3.2 新增]
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -29,10 +30,11 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.io.File;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.UUID; // [v3.2 新增]
 
 /**
- * NexusAI 核心知识中台 - v3.1 动态热加载版 (Hotfix)
- * 迭代记录：v1.0(基础) -> v2.0(Chroma) -> v2.1(SSE) -> v2.4(双核) -> v3.0(记忆) -> v3.1(动态上传)
+ * NexusAI 核心知识中台 - v3.2 异步状态追踪版
+ * 迭代记录：v1.0(基础) -> v2.0(Chroma) -> v2.1(SSE) -> v2.4(双核) -> v3.0(记忆) -> v3.1(动态上传) -> v3.2(异步化与状态追踪)
  */
 @RestController
 public class RAGController {
@@ -40,8 +42,9 @@ public class RAGController {
     private final ChatLanguageModel chatModel;
     private final StreamingChatLanguageModel streamingChatModel;
     private final ChatMemoryProvider chatMemoryProvider;
+    private final IngestionService ingestionService; // [v3.2 优化] 注入异步服务
+    private final StringRedisTemplate redisTemplate; // [v3.2 优化] 注入 Redis 用于状态轮询
 
-    // [v3.1 优化] 将核心组件提炼为成员变量，供上传接口复用
     private EmbeddingStore<TextSegment> embeddingStore;
     private EmbeddingModel embeddingModel;
     private Assistant assistant;
@@ -55,29 +58,31 @@ public class RAGController {
         String chat(@MemoryId String chatId, @UserMessage String message);
     }
 
+    // [v3.2 修改] 构造函数注入新依赖
     public RAGController(ChatLanguageModel chatModel,
                          StreamingChatLanguageModel streamingChatModel,
-                         ChatMemoryProvider chatMemoryProvider) {
+                         ChatMemoryProvider chatMemoryProvider,
+                         IngestionService ingestionService,
+                         StringRedisTemplate redisTemplate) {
         this.chatModel = chatModel;
         this.streamingChatModel = streamingChatModel;
         this.chatMemoryProvider = chatMemoryProvider;
+        this.ingestionService = ingestionService;
+        this.redisTemplate = redisTemplate;
     }
 
     @PostConstruct
     public void initRag() {
-        System.out.println("🚀 正在初始化 NexusAI v3.1 动态引擎...");
+        System.out.println("🚀 正在初始化 NexusAI v3.2 异步引擎...");
         try {
-            // 1. 初始化持久化存储与模型
             this.embeddingStore = ChromaEmbeddingStore.builder()
                     .baseUrl("http://localhost:8000")
-                    .collectionName("nexus_v31_dynamic")
+                    .collectionName("nexus_v32_clean_sync_0323")
                     .build();
             this.embeddingModel = new AllMiniLmL6V2QuantizedEmbeddingModel();
 
-            // 2. 扫描现有的静态文档
             refreshKnowledgeBase();
 
-            // 3. 构建 Assistant
             this.assistant = AiServices.builder(Assistant.class)
                     .chatLanguageModel(chatModel)
                     .streamingChatLanguageModel(streamingChatModel)
@@ -88,36 +93,45 @@ public class RAGController {
                             .maxResults(1)
                             .build())
                     .build();
-            System.out.println("✅ NexusAI v3.1 引擎点火成功。");
+            System.out.println("✅ NexusAI v3.2 引擎启动完成。");
         } catch (Exception e) { e.printStackTrace(); }
     }
 
     /**
-     * [v3.1 新增] 核心业务：动态 PDF 上传与即时向量化
+     * [v3.1 新增] -> [v3.2 优化] 动态 PDF 异步上传接口
+     * 💡 修改点：生成 TaskId 并分发异步任务，主线程立即返回，彻底解决前端上传卡顿问题
      */
     @PostMapping("/ai/upload")
     public ResponseEntity<String> uploadPdf(@RequestParam("file") MultipartFile file) {
-        if (file.isEmpty()) return ResponseEntity.badRequest().body("文件不能为空");
+        if (file.isEmpty()) return ResponseEntity.badRequest().body("EMPTY_FILE");
 
         try {
-            // 1. 保存文件到本地 documents 文件夹
+            // 生成唯一任务 ID
+            String taskId = UUID.randomUUID().toString();
+
+            // 1. 保存物理文件
             String filePath = "documents/" + file.getOriginalFilename();
             File dest = new File(Paths.get(filePath).toAbsolutePath().toString());
             file.transferTo(dest);
 
-            // 2. 实时解析并同步到 ChromaDB
-            Document document = FileSystemDocumentLoader.loadDocument(dest.toPath(), new ApacheTikaDocumentParser());
-            EmbeddingStoreIngestor.builder()
-                    .documentSplitter(DocumentSplitters.recursive(100, 0))
-                    .embeddingModel(embeddingModel)
-                    .embeddingStore(embeddingStore)
-                    .build()
-                    .ingest(document);
+            // 2. 💡 [v3.2 核心] 异步分发：将解析重任交给后台线程池
+            ingestionService.ingestAsync(taskId, dest.toPath(), embeddingModel, embeddingStore);
 
-            return ResponseEntity.ok("✅ 知识库已动态更新：" + file.getOriginalFilename());
+            // 3. 立即返回 TaskId 供前端轮询
+            return ResponseEntity.ok(taskId);
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("上传失败：" + e.getMessage());
+            return ResponseEntity.internalServerError().body("UPLOAD_ERROR");
         }
+    }
+
+    /**
+     * [v3.2 新增] 任务状态查询接口
+     * 💡 逻辑：前端拿到 TaskId 后，每隔 1-2 秒访问此接口，从 Redis 获取处理进度
+     */
+    @GetMapping("/ai/upload/status/{taskId}")
+    public String getUploadStatus(@PathVariable String taskId) {
+        String status = redisTemplate.opsForValue().get("nexus:task:" + taskId);
+        return status == null ? "NOT_FOUND" : status;
     }
 
     private void refreshKnowledgeBase() {
@@ -131,10 +145,6 @@ public class RAGController {
                 .ingest(documents);
     }
 
-    /**
-     * [v2.1 增强] SSE 流式接口
-     * [v3.1 修复] 补全 onError 处理，解决 IllegalConfigurationException
-     */
     @GetMapping(value = "/ai/rag/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamRagChat(@RequestParam String question, @RequestParam String chatId) {
         SseEmitter emitter = new SseEmitter(120 * 1000L);
@@ -143,14 +153,12 @@ public class RAGController {
         assistant.streamChat(chatId, question)
                 .onNext(token -> {
                     try {
-                        // [v2.2 优化] 使用事件包装确保协议解析正确
                         emitter.send(SseEmitter.event().data(token));
                     } catch (Exception e) {
                         emitter.completeWithError(e);
                     }
                 })
                 .onComplete(response -> emitter.complete())
-                // 💡 [v3.1-Hotfix] 必须显式处理错误，否则框架不允许启动流
                 .onError(error -> {
                     error.printStackTrace();
                     emitter.completeWithError(error);
