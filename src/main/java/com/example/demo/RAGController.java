@@ -50,8 +50,12 @@ public class RAGController {
     private Assistant assistant;
 
     @SystemMessage({
-            "你现在是 NexusAI 首席行政助理。",
-            "规则：必须且仅根据 [Context] 资料回答。若资料中无答案，请回复：'抱歉，当前知识库未涵盖此信息。'"
+            "你现在是 NexusAI 首席精准检索官。",
+            "## 核心禁令：",
+            "1. 严禁复述与用户问题【核心关键词】无关的任何章节。如果用户问‘第一章’，绝对不能提到‘第二、三、四章’。",
+            "2. 严禁回答资料中未提及的流程（比如：没写怎么报销就不要回答怎么报销）。",
+            "3. 你的任务是‘抠取’而非‘复写’。如果资料里是一整段，你只提取出用户关心的那一行数字或位置。",
+            "4. 回答必须以‘[精准检索结果]’开头。"
     })
     interface Assistant {
         TokenStream streamChat(@MemoryId String chatId, @UserMessage String message);
@@ -90,7 +94,8 @@ public class RAGController {
                     .contentRetriever(EmbeddingStoreContentRetriever.builder()
                             .embeddingStore(embeddingStore)
                             .embeddingModel(embeddingModel)
-                            .maxResults(1)
+                            .maxResults(2)    // [v3.2 优化] 一口气拿回最相关的 2 条 资料，通过交叉对比，拼凑出最完整的真相
+                            .minScore(0.7)
                             .build())
                     .build();
             System.out.println("✅ NexusAI v3.2 引擎启动完成。");
@@ -138,7 +143,7 @@ public class RAGController {
         List<Document> documents = FileSystemDocumentLoader.loadDocuments(
                 Paths.get("documents"), new ApacheTikaDocumentParser());
         EmbeddingStoreIngestor.builder()
-                .documentSplitter(DocumentSplitters.recursive(100, 0))
+                .documentSplitter(DocumentSplitters.recursive(300, 60))    // [v3.2 优化] 优化分词精度
                 .embeddingModel(embeddingModel)
                 .embeddingStore(embeddingStore)
                 .build()
